@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>record_d0dzs0 - Jegybeolvasó</title>
+    <!-- jsQR könyvtár -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+            background-color: #0a192f;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h2 { color: #64ffda; margin-bottom: 15px; }
+        
+        /* Keretben tartott ablak */
+        .scanner-wrapper {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            background: #112240;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 2px solid #64ffda;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            flex-shrink: 0;
+        }
+
+        #qr-canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+
+        #hidden-video {
+            display: none !important;
+        }
+
+        .close-btn {
+            display: none;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 36px;
+            height: 36px;
+            background: rgba(239, 68, 68, 0.9);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .start-btn {
+            background-color: #64ffda;
+            color: #0a192f;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .status-box {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #8892b0;
+            text-align: center;
+        }
+
+        /* --- Beolvasott jegyek listája szekció --- */
+        .history-container {
+            width: 100%;
+            max-width: 340px;
+            margin-top: 25px;
+            background: #112240;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(100, 255, 218, 0.2);
+            box-sizing: border-box;
+        }
+
+        .history-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: #64ffda;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 8px;
+        }
+
+        .history-list {
+            max-height: 220px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-right: 4px;
+        }
+
+        /* Görgetősáv stílus */
+        .history-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        .history-list::-webkit-scrollbar-thumb {
+            background: #233554;
+            border-radius: 4px;
+        }
+
+        .history-item {
+            background: #0a192f;
+            padding: 10px 12px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            border-left: 3px solid #10b981;
+        }
+
+        .history-item .ticket-id {
+            font-family: monospace;
+            color: #e6f1ff;
+            font-weight: bold;
+            word-break: break-all;
+        }
+
+        .history-item .scan-time {
+            color: #64ffda;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+            white-space: nowrap;
+        }
+
+        .empty-history {
+            color: #8892b0;
+            font-size: 12px;
+            text-align: center;
+            padding: 15px 0;
+            font-style: italic;
+        }
+
+        .reset-btn {
+            margin-top: 20px;
+            background: transparent;
+            border: 1px solid #ef4444;
+            color: #ef4444;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        
+        /* Modal Popup */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal {
+            width: 85%;
+            max-width: 350px;
+            padding: 30px 20px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.8);
+            animation: popIn 0.2s ease-out;
+        }
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .modal h3 { font-size: 24px; margin: 0 0 10px 0; }
+        .modal p { font-size: 14px; margin-bottom: 20px; word-break: break-all; }
+        .modal button {
+            padding: 12px 25px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            background: #fff;
+            color: #000;
+        }
+        
+        .valid { background-color: #10b981; color: #fff; }
+        .used { background-color: #f59e0b; color: #fff; }
+        .invalid { background-color: #ef4444; color: #fff; }
+    </style>
+</head>
+<body>
+
+    <h2>record_d0dzs0 Check-In</h2>
+
+    <div class="scanner-wrapper">
+        <button class="close-btn" id="closeBtn" onclick="stopScanner()">✕</button>
+        <button class="start-btn" id="startBtn" onclick="initScanner()">Szkennelés indítása</button>
+        <canvas id="qr-canvas"></canvas>
+        <video id="hidden-video" playsinline webkit-playsinline muted></video>
+    </div>
+
+    <div class="status-box" id="stats">Jegyadatbázis betöltése...</div>
+
+    <!-- Beolvasott Érvényes Jegyek Listája -->
+    <div class="history-container">
+        <div class="history-title">
+            <span>Beolvasott érvényes jegyek</span>
+            <span id="historyCount" style="font-size: 12px; color: #8892b0;">(0)</span>
+        </div>
+        <div class="history-list" id="historyList">
+            <div class="empty-history">Még nem lett beolvasva érvényes jegy.</div>
+        </div>
+    </div>
+
+    <button class="reset-btn" onclick="resetMemory()">Szkennelt adatok törlése (Reset)</button>
+
+    <!-- Modal Popup -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" id="modalContent">
+            <h3 id="modalTitle"></h3>
+            <p id="modalBody"></p>
+            <button onclick="resumeScanning()">Következő beolvasása</button>
+        </div>
+    </div>
+
+    <script>
+        let validTickets = new Set();
+        let usedTicketsMap = new Map(); // Kód -> Időpont párosok tárolása
+        let videoStream = null;
+        let animationFrameId = null;
+
+        function loadUsedFromStorage() {
+            const stored = localStorage.getItem('record_d0dzs0_used_map');
+            if (stored) {
+                const entries = JSON.parse(stored);
+                usedTicketsMap = new Map(entries);
+            }
+        }
+
+        function saveUsedToStorage() {
+            localStorage.setItem('record_d0dzs0_used_map', JSON.stringify(Array.from(usedTicketsMap.entries())));
+        }
+
+        fetch('valid_tickets.json')
+            .then(response => response.json())
+            .then(data => {
+                loadUsedFromStorage();
+                data.forEach(ticket => {
+                    if (!usedTicketsMap.has(ticket)) {
+                        validTickets.add(ticket);
+                    }
+                });
+                updateStats();
+                renderHistory();
+            })
+            .catch(err => {
+                document.getElementById('stats').innerText = "HIBA: A valid_tickets.json nem található!";
+            });
+
+        function updateStats() {
+            document.getElementById('stats').innerText = `Összesen: ${validTickets.size + usedTicketsMap.size} db | Bent van: ${usedTicketsMap.size} db`;
+        }
+
+        function renderHistory() {
+            const historyList = document.getElementById('historyList');
+            const historyCount = document.getElementById('historyCount');
+            
+            historyCount.innerText = `(${usedTicketsMap.size})`;
+
+            if (usedTicketsMap.size === 0) {
+                historyList.innerHTML = '<div class="empty-history">Még nem lett beolvasva érvényes jegy.</div>';
+                return;
+            }
+
+            // Legfrissebb kerül legfelülre
+            const items = Array.from(usedTicketsMap.entries()).reverse();
+            
+            historyList.innerHTML = items.map(([code, time]) => `
+                <div class="history-item">
+                    <span class="ticket-id">${code}</span>
+                    <span class="scan-time">${time}</span>
+                </div>
+            `).join('');
+        }
+
+        function getCurrentTimeFormatted() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            return `${hours}:${minutes}`;
+        }
+
+        async function initScanner() {
+            const video = document.getElementById('hidden-video');
+            const canvas = document.getElementById('qr-canvas');
+            const ctx = canvas.getContext('2d');
+
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" }
+                });
+                
+                video.srcObject = videoStream;
+                video.setAttribute("playsinline", "true");
+                video.setAttribute("webkit-playsinline", "true");
+                await video.play();
+
+                document.getElementById('startBtn').style.display = 'none';
+                document.getElementById('closeBtn').style.display = 'flex';
+                canvas.style.display = 'block';
+
+                function renderFrame() {
+                    if (video.readyState === video.HAVE_ENAVE_DATA || video.readyState === video.HAVE_ENOUGH_DATA) {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                            inversionAttempts: "dontInvert",
+                        });
+
+                        if (code && code.data) {
+                            onScanSuccess(code.data);
+                            return;
+                        }
+                    }
+                    animationFrameId = requestAnimationFrame(renderFrame);
+                }
+
+                animationFrameId = requestAnimationFrame(renderFrame);
+
+            } catch (err) {
+                alert("Kamera hozzáférés megtagadva vagy nem elérhető.");
+                stopScanner();
+            }
+        }
+
+        function stopScanner() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+
+            document.getElementById('qr-canvas').style.display = 'none';
+            document.getElementById('closeBtn').style.display = 'none';
+            document.getElementById('startBtn').style.display = 'block';
+        }
+
+        function onScanSuccess(decodedText) {
+            stopScanner();
+
+            const modalOverlay = document.getElementById('modalOverlay');
+            const modalContent = document.getElementById('modalContent');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalBody = document.getElementById('modalBody');
+
+            modalContent.className = "modal";
+
+            if (validTickets.has(decodedText)) {
+                const scanTime = getCurrentTimeFormatted();
+                
+                validTickets.delete(decodedText);
+                usedTicketsMap.set(decodedText, scanTime);
+                saveUsedToStorage();
+                
+                modalContent.classList.add('valid');
+                modalTitle.innerText = "BELÉPÉS ENGEDÉLYEZVE";
+                modalBody.innerText = `Jegy kódja:\n${decodedText}\n\nIdőpont: ${scanTime}`;
+                
+                renderHistory();
+            } else if (usedTicketsMap.has(decodedText)) {
+                const prevTime = usedTicketsMap.get(decodedText);
+                modalContent.classList.add('used');
+                modalTitle.innerText = "MÁR FELHASZNÁLT JEGY";
+                modalBody.innerText = `Ezt a jegyet már beolvasták (${prevTime})!\nKód: ${decodedText}`;
+            } else {
+                modalContent.classList.add('invalid');
+                modalTitle.innerText = "ÉRVÉNYTELEN JEGY";
+                modalBody.innerText = `Ez a kód nem szerepel a rendszerben!\nKód: ${decodedText}`;
+            }
+
+            modalOverlay.style.display = 'flex';
+            updateStats();
+        }
+
+        function resumeScanning() {
+            document.getElementById('modalOverlay').style.display = 'none';
+            initScanner();
+        }
+
+        function resetMemory() {
+            if (confirm("Biztosan törölni akarod a felhasznált jegyek listáját és a beolvasási előzményeket?")) {
+                localStorage.removeItem('record_d0dzs0_used_map');
+                localStorage.removeItem('record_d0dzs0_used');
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>

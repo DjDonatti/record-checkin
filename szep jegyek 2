@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>record. d0dzs0 - Jegyek</title>
+    <!-- QRCode generator könyvtár -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #050b14;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Navigációs Vezérlősáv */
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            background: #112240;
+            padding: 12px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(100, 255, 218, 0.3);
+            margin-bottom: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .controls button {
+            background: #64ffda;
+            color: #0a192f;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .controls button:disabled {
+            background: #233554;
+            color: #8892b0;
+            cursor: not-allowed;
+        }
+
+        .controls input {
+            width: 60px;
+            background: #0a192f;
+            border: 1px solid #64ffda;
+            color: #fff;
+            padding: 6px;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .ticket-counter {
+            color: #8892b0;
+            font-size: 14px;
+        }
+
+        /* Jegy kártya a csatolt képpel mint háttér */
+        .ticket-card {
+            width: 100%;
+            max-width: 380px;
+            height: 680px;
+            background: url('bg.jpg') no-repeat center center;
+            background-size: cover;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 15px rgba(100, 255, 218, 0.2);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 25px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Alsó üveg hatású doboz a QR-kódnak */
+        .qr-container {
+            background: rgba(10, 25, 47, 0.75);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .qr-box {
+            background: #ffffff;
+            padding: 12px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .ticket-code {
+            color: #64ffda;
+            font-size: 13px;
+            font-family: monospace;
+            margin-top: 12px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .ticket-type {
+            color: #ffffff;
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 4px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        /* Nyomtatáskor elrejtjük a vezérlő gombokat */
+        @media print {
+            .controls { display: none; }
+            body { background: none; padding: 0; }
+            .ticket-card { box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navigáció / Léptető -->
+    <div class="controls">
+        <button id="prevBtn" onclick="changeTicket(-1)">◄ Előző</button>
+        <input type="number" id="ticketInput" min="1" value="1" onchange="jumpToTicket()">
+        <span class="ticket-counter" id="totalCounter">/ 200</span>
+        <button id="nextBtn" onclick="changeTicket(1)">Következő ►</button>
+    </div>
+
+    <!-- Jegy Kártya -->
+    <div class="ticket-card">
+        <div class="qr-container">
+            <div class="qr-box" id="qrcode"></div>
+            <div class="ticket-code" id="codeText">KÓD BETÖLTÉSE...</div>
+            <div class="ticket-type">Belépőjegy</div>
+        </div>
+    </div>
+
+    <script>
+        let ticketList = [];
+        let currentIndex = 0;
+        let qrcodeObj = null;
+
+        // Valid jegyek betöltése a JSON fájlból
+        fetch('valid_tickets.json')
+            .then(response => response.json())
+            .then(data => {
+                ticketList = data;
+                document.getElementById('totalCounter').innerText = `/ ${ticketList.length}`;
+                document.getElementById('ticketInput').max = ticketList.length;
+                renderTicket(0);
+            })
+            .catch(err => {
+                document.getElementById('codeText').innerText = "HIBA: valid_tickets.json!";
+            });
+
+        function renderTicket(index) {
+            if (ticketList.length === 0) return;
+
+            currentIndex = index;
+            const currentCode = ticketList[currentIndex];
+
+            // Léptető beállítása
+            document.getElementById('ticketInput').value = currentIndex + 1;
+            document.getElementById('prevBtn').disabled = (currentIndex === 0);
+            document.getElementById('nextBtn').disabled = (currentIndex === ticketList.length - 1);
+
+            // Kód kiírása
+            document.getElementById('codeText').innerText = currentCode;
+
+            // QR Kód újragenerálása
+            const qrContainer = document.getElementById("qrcode");
+            qrContainer.innerHTML = ""; // Előző törlése
+            
+            qrcodeObj = new QRCode(qrContainer, {
+                text: currentCode,
+                width: 140,
+                height: 140,
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
+        }
+
+        function changeTicket(direction) {
+            let newIndex = currentIndex + direction;
+            if (newIndex >= 0 && newIndex < ticketList.length) {
+                renderTicket(newIndex);
+            }
+        }
+
+        function jumpToTicket() {
+            let inputVal = parseInt(document.getElementById('ticketInput').value);
+            if (isNaN(inputVal)) return;
+
+            if (inputVal < 1) inputVal = 1;
+            if (inputVal > ticketList.length) inputVal = ticketList.length;
+
+            renderTicket(inputVal - 1);
+        }
+    </script>
+</body>
+</html>
